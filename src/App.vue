@@ -177,25 +177,39 @@
 
 <script setup>
 import { reactive, ref } from "vue";
+import { cryptocompare } from "../security.js";
 
-let ticker = ref("default"),
+console.log("Cryptocompare Key", cryptocompare);
+let ticker = ref(""),
     tickers = reactive([
-        { name: "DEMO1", price: "-" },
-        { name: "DEMO2", price: "-" },
-        { name: "DEMO3", price: "-" },
-        { name: "DEMO4", price: "-" },
+        // { name: "DEMO1", price: "-" },
+        // { name: "DEMO2", price: "-" },
+        // { name: "DEMO3", price: "-" },
+        // { name: "DEMO4", price: "-" },
     ]),
-    selected = reactive({ ticker: {} });
+    selected = reactive({ ticker: null });
 
 const add = () => {
     const newTicker = {
-        name: ticker,
+        name: ticker.value,
         price: "-",
     };
     console.log("Clicked", ticker.value);
     console.log("Clicked2", ticker);
+    console.log("Cryptocompare Key", cryptocompare);
 
     tickers.push(newTicker);
+    setInterval(async () => {
+        const f = await fetch(
+            `https://min-api.cryptocompare.com/data/price?fsym=${newTicker.name}&tsyms=USD,EUR`
+        );
+        const data = await f.json();
+        console.log("New Ticker:", newTicker.name, "DATA ", data);
+        // newTicker.price = data.USD;
+        tickers.find((t) => t.name === newTicker.name).price = data.USD;
+        console.log("New TickerPrice:", tickers);
+    }, 2000);
+    //min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=BTC,USD,EUR
     ticker = "";
 };
 
