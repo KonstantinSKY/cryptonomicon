@@ -206,7 +206,16 @@ const add = () => {
         const data = await f.json();
         console.log("New Ticker:", newTicker.name, "DATA ", data);
         // newTicker.price = data.USD;
-        tickers.find((t) => t.name === newTicker.name).price = data.USD;
+        // tickers.find((t) => t.name === newTicker.name).price = data.USD;
+        let tickerToUpdate = tickers.find((t) => t.name === newTicker.name);
+        if (tickerToUpdate) {
+            tickerToUpdate.price = data.USD;
+        } else {
+            // Handle the case where the ticker does not exist
+            // For example, you might want to add it to the array or log an error
+            console.log("Ticker not found:", newTicker.name);
+        }
+
         console.log("New TickerPrice:", tickers);
     }, 2000);
     //min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=BTC,USD,EUR
@@ -215,8 +224,10 @@ const add = () => {
 
 function handleDelete(tickerToRemove) {
     console.log("Clicked for Delete", tickerToRemove);
-    alert("Clicked for Delete", tickerToRemove);
+    // alert("Clicked for Delete", tickerToRemove);
+    alert(tickers);
     tickers.splice(tickerToRemove, 1);
+    selected.ticker = null;
     // tickers = tickers.filter((t) => t !== tickerToRemove);
 }
 
