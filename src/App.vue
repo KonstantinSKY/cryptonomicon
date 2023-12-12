@@ -13,7 +13,7 @@
                             <input
                                 id="wallet"
                                 v-model="ticker"
-                                @keydown.enter="add"
+                                @keydown.enter="add()"
                                 class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
                                 name="wallet"
                                 placeholder="Например DOGE"
@@ -77,7 +77,7 @@
                     <div
                         v-for="t in tickers"
                         :key="t.name"
-                        @click="selected.ticker = t"
+                        @click="select(t)"
                         :class="{
                             'border-4': selected.ticker === t,
                         }"
@@ -127,10 +127,12 @@
                 <div
                     class="flex items-end border-gray-600 border-b border-l h-64"
                 >
-                    <div class="bg-purple-800 border w-10 h-24"></div>
-                    <div class="bg-purple-800 border w-10 h-32"></div>
-                    <div class="bg-purple-800 border w-10 h-48"></div>
-                    <div class="bg-purple-800 border w-10 h-16"></div>
+                    <div
+                        v-for="(bar, idx) in normalizeGraph()"
+                        :key="idx"
+                        :style="{ height: `${bar}%` }"
+                        class="bg-purple-800 border w-10"
+                    ></div>
                 </div>
                 <button
                     type="button"
@@ -187,10 +189,17 @@ let ticker = ref(""),
         // { name: "DEMO3", price: "-" },
         // { name: "DEMO4", price: "-" },
     ]),
-    selected = reactive({ ticker: null });
+    selected = reactive({ ticker: null }),
+    graph = reactive([]);
 
+const intervalIDs = {};
+
+function select(t) {
+    selected.ticker = t;
+    graph = [];
+}
 const add = () => {
-    const newTicker = {
+    const currentTicker = {
         name: ticker.value,
         price: "-",
     };
@@ -198,39 +207,50 @@ const add = () => {
     console.log("Clicked2", ticker);
     console.log("Cryptocompare Key", cryptocompare);
 
-    tickers.push(newTicker);
-    setInterval(async () => {
+    tickers.push(currentTicker);
+    intervalIDs[currentTicker.name] = setInterval(async () => {
         const f = await fetch(
-            `https://min-api.cryptocompare.com/data/price?fsym=${newTicker.name}&tsyms=USD,EUR`
+            `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD`
         );
         const data = await f.json();
-        console.log("New Ticker:", newTicker.name, "DATA ", data);
+        console.log("New Ticker:", currentTicker.name, "DATA ", data);
         // newTicker.price = data.USD;
         // tickers.find((t) => t.name === newTicker.name).price = data.USD;
-        let tickerToUpdate = tickers.find((t) => t.name === newTicker.name);
+        let tickerToUpdate = tickers.find((t) => t.name === currentTicker.name);
         if (tickerToUpdate) {
             tickerToUpdate.price = data.USD;
+            if (selected.ticker?.name === currentTicker.name) {
+                graph.push(data.USD);
+            }
         } else {
             // Handle the case where the ticker does not exist
             // For example, you might want to add it to the array or log an error
-            console.log("Ticker not found:", newTicker.name);
+            console.log("Ticker not found:", currentTicker.name);
         }
 
         console.log("New TickerPrice:", tickers);
-    }, 2000);
-    //min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=BTC,USD,EUR
-    ticker = "";
+    }, 3000);
+    // min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=BTC,USD,EUR
+    ticker.value = "";
 };
 
 function handleDelete(tickerToRemove) {
     console.log("Clicked for Delete", tickerToRemove);
     // alert("Clicked for Delete", tickerToRemove);
-    alert(tickers);
+    alert("Deleting:" + tickerToRemove.name);
     tickers.splice(tickerToRemove, 1);
+    clearInterval(intervalIDs[tickerToRemove.name]);
     selected.ticker = null;
     // tickers = tickers.filter((t) => t !== tickerToRemove);
 }
 
+function normalizeGraph() {
+    const maxValue = Math.max(...graph),
+        minValue = Math.min(...graph);
+    return graph.map(
+        (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
+    );
+}
 // ... any other composition logic ...
 </script>
 
