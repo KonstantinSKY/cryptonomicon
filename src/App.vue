@@ -183,12 +183,7 @@ import { cryptocompare } from "../security.js";
 
 console.log("Cryptocompare Key", cryptocompare);
 let ticker = ref(""),
-    tickers = reactive([
-        // { name: "DEMO1", price: "-" },
-        // { name: "DEMO2", price: "-" },
-        // { name: "DEMO3", price: "-" },
-        // { name: "DEMO4", price: "-" },
-    ]),
+    tickers = reactive([]),
     selected = reactive({ ticker: null }),
     graph = reactive([]);
 
@@ -235,10 +230,15 @@ const add = () => {
 };
 
 function handleDelete(tickerToRemove) {
-    console.log("Clicked for Delete", tickerToRemove);
+    const index = tickers.findIndex((t) => t.name === tickerToRemove.name);
+
+    console.log("Clicked for Delete", tickerToRemove, "from", tickers);
     // alert("Clicked for Delete", tickerToRemove);
     alert("Deleting:" + tickerToRemove.name);
-    tickers.splice(tickerToRemove, 1);
+    if (index !== -1) {
+        // Remove the ticker from the array
+        tickers.splice(index, 1);
+    }
     clearInterval(intervalIDs[tickerToRemove.name]);
     selected.ticker = null;
     // tickers = tickers.filter((t) => t !== tickerToRemove);
