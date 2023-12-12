@@ -14,39 +14,47 @@
                                 id="wallet"
                                 v-model="ticker"
                                 @keydown.enter="add()"
+                                @keydown="checkSymbol($event)"
+                                @keyup="searchTickers"
                                 class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
                                 name="wallet"
-                                placeholder="Например DOGE"
+                                placeholder="For Instance: DOGE"
                                 type="text"
                             />
                         </div>
-                        <!--                        <div-->
-                        <!--                            class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap"-->
-                        <!--                        >-->
-                        <!--                            <span-->
-                        <!--                                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"-->
-                        <!--                            >-->
-                        <!--                                BTC-->
-                        <!--                            </span>-->
-                        <!--                            <span-->
-                        <!--                                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"-->
-                        <!--                            >-->
-                        <!--                                DOGE-->
-                        <!--                            </span>-->
-                        <!--                            <span-->
-                        <!--                                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"-->
-                        <!--                            >-->
-                        <!--                                BCH-->
-                        <!--                            </span>-->
-                        <!--                            <span-->
-                        <!--                                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"-->
-                        <!--                            >-->
-                        <!--                                CHD-->
-                        <!--                            </span>-->
-                        <!--                        </div>-->
-                        <!--                        <div class="text-sm text-red-600">-->
-                        <!--                            Такой тикер уже добавлен-->
-                        <!--                        </div>-->
+                        <!--                        <template v-if="foundTickers.length > 0">-->
+                        <div
+                            v-if="foundTickers.length > 0"
+                            class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap"
+                        >
+                            <span
+                                v-for="t in foundTickers"
+                                :key="t"
+                                @click="clickTickerBadge(t)"
+                                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
+                            >
+                                {{ t }}
+                            </span>
+                            <!--                                <span-->
+                            <!--                                    class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"-->
+                            <!--                                >-->
+                            <!--                                    DOGE-->
+                            <!--                                </span>-->
+                            <!--                                <span-->
+                            <!--                                    class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"-->
+                            <!--                                >-->
+                            <!--                                    BCH-->
+                            <!--                                </span>-->
+                            <!--                                <span-->
+                            <!--                                    class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"-->
+                            <!--                                >-->
+                            <!--                                    CHD-->
+                            <!--                                </span>-->
+                        </div>
+                        <!--                        </template>-->
+                        <div class="text-sm text-red-600">
+                            The Ticker is already added
+                        </div>
                     </div>
                 </div>
                 <button
@@ -72,14 +80,14 @@
             </section>
             <template v-if="tickers.length">
                 <hr class="w-full border-t border-gray-600 my-4" />
-                {{ selected.ticker }}
+                {{ selectedTicker }}
                 <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
                     <div
                         v-for="t in tickers"
                         :key="t.name"
                         @click="select(t)"
                         :class="{
-                            'border-4': selected.ticker === t,
+                            'border-4': selectedTicker === t,
                         }"
                         class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
                     >
@@ -120,9 +128,9 @@
                 </dl>
                 <hr class="w-full border-t border-gray-600 my-4" />
             </template>
-            <section class="relative" v-if="selected.ticker">
+            <section class="relative" v-if="selectedTicker">
                 <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-                    {{ selected.ticker.name }} - USD
+                    {{ selectedTicker.name }} - USD
                 </h3>
                 <div
                     class="flex items-end border-gray-600 border-b border-l h-64"
@@ -136,7 +144,7 @@
                 </div>
                 <button
                     type="button"
-                    @click="selected.ticker = null"
+                    @click="selectedTicker = null"
                     class="absolute top-0 right-0"
                 >
                     <svg
@@ -178,20 +186,88 @@
 <!--</script>-->
 
 <script setup>
-import { reactive, ref } from "vue";
+import { ref, onMounted } from "vue";
 import { cryptocompare } from "../security.js";
 
 console.log("Cryptocompare Key", cryptocompare);
 let ticker = ref(""),
-    tickers = reactive([]),
-    selected = reactive({ ticker: null }),
-    graph = reactive([]);
+    tickers = ref([]),
+    selectedTicker = ref(null),
+    graph = ref([]),
+    foundTickers = ref([]),
+    ticker_list = {};
 
 const intervalIDs = {};
+console.log("foundTickers", foundTickers);
+onMounted(async () => {
+    try {
+        const response = await fetch(
+            "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
+        );
+        if (!response.ok) {
+            throw new Error("Network response was not ok");
+        }
+        let resp = await response.json();
+        ticker_list = resp.Data;
+        // Process your data here
+        console.log("GOT DATA:", ticker_list);
+    } catch (error) {
+        console.error("There was a problem with the fetch operation:", error);
+    }
+});
+
+function checkSymbol(event) {
+    console.log("Event", event);
+    if (event.key === "Enter" || event.key === "Backspace") {
+        return;
+    }
+    const validKeys = /^[A-Za-z0-9]$/; // Regular expression for letters and digits
+
+    if (!validKeys.test(event.key)) {
+        event.preventDefault();
+        return;
+    }
+}
+
+function searchTickers() {
+    if (!ticker.value) {
+        return;
+    }
+    console.log("found ticker value", ticker.value);
+    foundTickers.value = [];
+    console.log("found ticker value2", ticker.value);
+    const searchQuery = ticker.value.toLowerCase();
+    let matchCount = 0;
+
+    console.log("TickerList", ticker_list);
+    for (let t of Object.values(ticker_list)) {
+        if (matchCount >= 4) {
+            break; // Stop the loop if 4 matches are found
+        }
+        // console.log("searchQuery", searchQuery);
+        // console.log("TickerList", ticker_list);
+        console.log("t", t);
+        if (
+            t.Symbol.toLowerCase().includes(searchQuery) ||
+            t.FullName.toLowerCase().includes(searchQuery)
+        ) {
+            foundTickers.value.push(t.Symbol); // Add only the Symbol to the array
+            matchCount++;
+            console.log("Found Ticker, ", t.Symbol);
+        }
+        console.log("Found Tickers, ", foundTickers.value);
+    }
+}
+
+function clickTickerBadge(t) {
+    ticker.value = t;
+    add();
+    foundTickers.value = [];
+}
 
 function select(t) {
-    selected.ticker = t;
-    graph = [];
+    selectedTicker.value = t;
+    graph.value = [];
 }
 const add = () => {
     const currentTicker = {
@@ -202,7 +278,7 @@ const add = () => {
     console.log("Clicked2", ticker);
     console.log("Cryptocompare Key", cryptocompare);
 
-    tickers.push(currentTicker);
+    tickers.value.push(currentTicker);
     intervalIDs[currentTicker.name] = setInterval(async () => {
         const f = await fetch(
             `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD`
@@ -211,11 +287,14 @@ const add = () => {
         console.log("New Ticker:", currentTicker.name, "DATA ", data);
         // newTicker.price = data.USD;
         // tickers.find((t) => t.name === newTicker.name).price = data.USD;
-        let tickerToUpdate = tickers.find((t) => t.name === currentTicker.name);
+        let tickerToUpdate = tickers.value.find(
+            (t) => t.name === currentTicker.name
+        );
         if (tickerToUpdate) {
             tickerToUpdate.price = data.USD;
-            if (selected.ticker?.name === currentTicker.name) {
-                graph.push(data.USD);
+            if (selectedTicker.value?.name === currentTicker.name) {
+                graph.value.push(data.USD);
+                console.log("Added new GraphBar", data.USD);
             }
         } else {
             // Handle the case where the ticker does not exist
@@ -230,24 +309,27 @@ const add = () => {
 };
 
 function handleDelete(tickerToRemove) {
-    const index = tickers.findIndex((t) => t.name === tickerToRemove.name);
+    const index = tickers.value.findIndex(
+        (t) => t.name === tickerToRemove.name
+    );
 
     console.log("Clicked for Delete", tickerToRemove, "from", tickers);
     // alert("Clicked for Delete", tickerToRemove);
     alert("Deleting:" + tickerToRemove.name);
     if (index !== -1) {
         // Remove the ticker from the array
-        tickers.splice(index, 1);
+        tickers.value.splice(index, 1);
     }
     clearInterval(intervalIDs[tickerToRemove.name]);
-    selected.ticker = null;
+    selectedTicker.value = null;
     // tickers = tickers.filter((t) => t !== tickerToRemove);
 }
 
 function normalizeGraph() {
-    const maxValue = Math.max(...graph),
-        minValue = Math.min(...graph);
-    return graph.map(
+    const maxValue = Math.max(...graph.value),
+        minValue = Math.min(...graph.value);
+    console.log("Normalizing Graph..");
+    return graph.value.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
     );
 }
