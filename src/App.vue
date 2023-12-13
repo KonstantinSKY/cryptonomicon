@@ -16,6 +16,7 @@
                                 @keydown.enter="add()"
                                 @keydown="checkSymbol($event)"
                                 @keyup="searchTickers"
+                                @focus="isTickerAdded = false"
                                 class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
                                 name="wallet"
                                 placeholder="For Instance: DOGE"
@@ -52,7 +53,7 @@
                             <!--                                </span>-->
                         </div>
                         <!--                        </template>-->
-                        <div class="text-sm text-red-600">
+                        <div v-if="isTickerAdded" class="text-sm text-red-600">
                             The Ticker is already added
                         </div>
                     </div>
@@ -195,9 +196,15 @@ let ticker = ref(""),
     selectedTicker = ref(null),
     graph = ref([]),
     foundTickers = ref([]),
-    ticker_list = {};
+    ticker_list = {},
+    isTickerAdded = ref(false);
 
 const intervalIDs = {};
+const tickerData = localStorage.getItem("crypto-list");
+if (tickerData) {
+    tickers.value = JSON.parse(tickerData);
+}
+
 console.log("foundTickers", foundTickers);
 onMounted(async () => {
     try {
@@ -233,9 +240,9 @@ function searchTickers() {
     if (!ticker.value) {
         return;
     }
-    console.log("found ticker value", ticker.value);
+    // console.log("found ticker value", ticker.value);
     foundTickers.value = [];
-    console.log("found ticker value2", ticker.value);
+    // console.log("found ticker value2", ticker.value);
     const searchQuery = ticker.value.toLowerCase();
     let matchCount = 0;
 
@@ -244,25 +251,41 @@ function searchTickers() {
         if (matchCount >= 4) {
             break; // Stop the loop if 4 matches are found
         }
-        // console.log("searchQuery", searchQuery);
-        // console.log("TickerList", ticker_list);
-        console.log("t", t);
+        // console.log("t", t);
         if (
             t.Symbol.toLowerCase().includes(searchQuery) ||
             t.FullName.toLowerCase().includes(searchQuery)
         ) {
             foundTickers.value.push(t.Symbol); // Add only the Symbol to the array
             matchCount++;
-            console.log("Found Ticker, ", t.Symbol);
         }
-        console.log("Found Tickers, ", foundTickers.value);
+        // console.log("Found Tickers, ", foundTickers.value);
     }
+}
+
+function checkIfTickerAdded() {
+    if (
+        tickers.value.some(
+            (tickerObj) => tickerObj.name === ticker.value.toLocaleUpperCase()
+        )
+    ) {
+        isTickerAdded.value = true;
+        // console.log("Ticker Already added");
+    }
+    return isTickerAdded.value;
+    // console.log("Tickers not found");
 }
 
 function clickTickerBadge(t) {
     ticker.value = t;
+    isTickerAdded.value = false;
+    // console.log("Ticker clicked", t);
+    // console.log("Ticker selected", ticker.value);
+    // console.log("Tickers in list ", tickers.value);
+
     add();
-    foundTickers.value = [];
+    // foundTickers.value = [];
+    // console.log("Tickers", tickers.value[0]);
 }
 
 function select(t) {
@@ -270,8 +293,12 @@ function select(t) {
     graph.value = [];
 }
 const add = () => {
+    if (checkIfTickerAdded()) {
+        return;
+    }
+
     const currentTicker = {
-        name: ticker.value,
+        name: ticker.value.toLocaleUpperCase(),
         price: "-",
     };
     console.log("Clicked", ticker.value);
@@ -279,6 +306,7 @@ const add = () => {
     console.log("Cryptocompare Key", cryptocompare);
 
     tickers.value.push(currentTicker);
+    localStorage.setItem("crypto-list", JSON.stringify(tickers.value));
     intervalIDs[currentTicker.name] = setInterval(async () => {
         const f = await fetch(
             `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD`
@@ -306,6 +334,7 @@ const add = () => {
     }, 3000);
     // min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=BTC,USD,EUR
     ticker.value = "";
+    foundTickers.value = [];
 };
 
 function handleDelete(tickerToRemove) {
