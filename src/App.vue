@@ -66,6 +66,7 @@
                 <br />
                 Filter: <input v-model="filter" />
                 <button
+                    v-if="page > 1"
                     @click="page -= 1"
                     class="my-4 mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                 >
@@ -89,7 +90,7 @@
                     <div
                         v-for="t in paginatedTickers"
                         :key="t.name"
-                        @click="select(t)"
+                        @click="selectedTicker = t"
                         :class="{
                             'border-4': selectedTicker === t,
                         }"
@@ -191,7 +192,7 @@
 
 <script setup>
 import { ref, onMounted, watch, computed } from "vue";
-// import { cryptocompare } from "../security.js";
+import { cryptocompare } from "../security.js";
 
 let ticker = ref(""),
     filter = ref(""),
@@ -241,43 +242,50 @@ const normalizedGraph = computed(() => {
     const maxValue = Math.max(...graph.value),
         minValue = Math.min(...graph.value);
 
-    // if (maxValue === minValue) {
-    //     return graph.value.map(() => 50);
-    // }
+    if (maxValue === minValue) {
+        return graph.value.map(() => 50);
+    }
     // console.log("Normalizing Graph..");
     return graph.value.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
     );
 });
 
-// const subcribedIDs = {};
-// const tickerData = localStorage.getItem("crypto-list");
-// if (tickerData) {
-//     tickers.value = JSON.parse(tickerData);
-// }
-// tickers.value.forEach((t) => subscribeToUpdate(t.name));
+const pageStateOptions = computed(() => {
+    return {
+        filter: filter.value,
+        page: page.value,
+    };
+});
 
-// const windowData = Object.fromEntries(
-//     new URL(window.location).searchParams.entries()
-// );
-//
-// if (windowData.filter) {
-//     filter.value = windowData.filter;
-// }
-// if (windowData.page) {
-//     page.value = windowData.page;
-// }
+function checkTickerErrors() {
+    const isExistsTicker = Object.values(ticker_list).some(
+        (tickerObj) => tickerObj.Symbol === ticker.value.toLocaleUpperCase()
+    );
+    const isTickerAdded = tickers.value.some(
+        (tickerObj) => tickerObj.name === ticker.value.toLocaleUpperCase()
+    );
+    console.log("isExistsTicker", isExistsTicker);
+    if (!isExistsTicker) {
+        tickerError.value = "Ticker in not exists";
+        return true;
+    } else if (isTickerAdded) {
+        tickerError.value = "The ticker is already added";
+        return true;
+    }
+    return false;
+}
 
-console.log("foundTickers", foundTickers);
 onMounted(async () => {
     try {
         const response = await fetch(
-            "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
+            `https://min-api.cryptocompare.com/data/all/coinlist?summary=true&api_key=${cryptocompare.key}`
         );
         if (!response.ok) {
             throw new Error("Network response was not ok");
         }
         let resp = await response.json();
+        console.log("RESPONSE:", resp);
         ticker_list = resp.Data;
         // Process your data here
         console.log("GOT DATA:", ticker_list);
@@ -303,7 +311,7 @@ function searchTickers() {
     if (!ticker.value) {
         return;
     }
-    // console.log("found ticker value", ticker.value);
+    console.log("found ticker value", ticker.value);
     foundTickers.value = [];
     // console.log("found ticker value2", ticker.value);
     const searchQuery = ticker.value.toLowerCase();
@@ -322,56 +330,28 @@ function searchTickers() {
             foundTickers.value.push(t.Symbol); // Add only the Symbol to the array
             matchCount++;
         }
-        // console.log("Found Tickers, ", foundTickers.value);
+        console.log("Found Tickers, ", foundTickers.value);
     }
 }
 
-function isExistsTicker() {
-    return Object.values(ticker_list).some(
-        (tickerObj) => tickerObj.Symbol === ticker.value.toLocaleUpperCase()
-    );
-}
-
-function isTickerAdded() {
-    return tickers.value.some(
-        (tickerObj) => tickerObj.name === ticker.value.toLocaleUpperCase()
-    );
-}
-// function getFilteredList() {
-//     const start = (page.value - 1) * 6,
-//         end = page.value * 6,
-//         filteredTickers = tickers.value.filter((t) =>
-//             t.name.includes(filter.value.toLocaleUpperCase())
-//         );
-//     hasNextPage.value = filteredTickers.length > end;
-//     return filteredTickers.slice(start, end);
-// }
-//
 function clickTickerBadge(t) {
     ticker.value = t;
-    isTickerAdded.value = false;
     tickerError.value = "";
-    // console.log("Ticker clicked", t);
-    // console.log("Ticker selected", ticker.value);
-    // console.log("Tickers in list ", tickers.value);
-
     add();
-    // foundTickers.value = [];
-    // console.log("Tickers", tickers.value[0]);
-}
-
-function select(t) {
-    selectedTicker.value = t;
-    graph.value = [];
 }
 
 function subscribeToUpdate(tickerName) {
     subcribedIDs[tickerName] = setInterval(async () => {
         const f = await fetch(
-            `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD`
+            `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=${cryptocompare.key}`
         );
         const data = await f.json();
-        console.log("New Ticker:", tickerName, "DATA ", data);
+        // console.log("New Ticker:", tickerName, "DATA ", data);
+        if (data.Response === "Error") {
+            console.log("Response Error:", data.Message);
+            clearInterval(subcribedIDs[tickerName]);
+            return;
+        }
         // newTicker.price = data.USD;
         // tickers.find((t) => t.name === newTicker.name).price = data.USD;
         let tickerToUpdate = tickers.value.find((t) => t.name === tickerName);
@@ -387,18 +367,12 @@ function subscribeToUpdate(tickerName) {
             console.log("Ticker not found:", tickerName);
         }
 
-        console.log("New TickerPrice:", tickers);
+        // console.log("New TickerPrice:", tickers);
     }, 3000);
 }
 
 const add = () => {
-    if (!isExistsTicker()) {
-        tickerError.value = "Ticker in not exists";
-        console.log("Ticker is not exists");
-        return;
-    }
-    if (isTickerAdded()) {
-        tickerError.value = "The ticker is already added";
+    if (checkTickerErrors()) {
         return;
     }
 
@@ -406,59 +380,56 @@ const add = () => {
         name: ticker.value.toLocaleUpperCase(),
         price: "-",
     };
-    // console.log("Clicked", ticker.value);
-    // console.log("Clicked2", ticker);
-    // console.log("Cryptocompare Key", cryptocompare);
 
-    tickers.value.push(currentTicker);
-    localStorage.setItem("crypto-list", JSON.stringify(tickers.value));
+    tickers.value = [...tickers.value, currentTicker];
 
+    console.log("Tickers after Added", tickers.value);
     subscribeToUpdate(currentTicker.name);
     ticker.value = "";
     foundTickers.value = [];
 };
 
 function handleDelete(tickerToRemove) {
-    const index = tickers.value.findIndex(
-        (t) => t.name === tickerToRemove.name
-    );
+    tickers.value = tickers.value.filter((t) => t !== tickerToRemove);
 
-    console.log("Clicked for Delete", tickerToRemove, "from", tickers);
-    // alert("Clicked for Delete", tickerToRemove);
+    // const index = tickers.value.findIndex(
+    //     (t) => t.name === tickerToRemove.name
+    // );
+    //
+    // console.log("Clicked for Delete", tickerToRemove, "from", tickers);
+    // // alert("Clicked for Delete", tickerToRemove);
     alert("Deleting:" + tickerToRemove.name);
-    if (index !== -1) {
-        // Remove the ticker from the array
-        tickers.value.splice(index, 1);
-        localStorage.setItem("crypto-list", JSON.stringify(tickers.value));
-    }
     clearInterval(subcribedIDs[tickerToRemove.name]);
-    selectedTicker.value = null;
+    if (selectedTicker.value === tickerToRemove) {
+        selectedTicker.value = null;
+    }
     // tickers = tickers.filter((t) => t !== tickerToRemove);
 }
 
-// function normalizeGraph() {
-//     const maxValue = Math.max(...graph.value),
-//         minValue = Math.min(...graph.value);
-//     console.log("Normalizing Graph..");
-//     return graph.value.map(
-//         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
-//     );
-// }
+watch(tickers, () => {
+    console.log("NEW TICKERS", tickers.value);
+    localStorage.setItem("crypto-list", JSON.stringify(tickers.value));
+});
+
+watch(selectedTicker, () => {
+    graph.value = [];
+});
+
+watch(paginatedTickers, () => {
+    if (paginatedTickers.value.length === 0 && page.value > 1) {
+        page.value -= 1;
+    }
+});
 
 watch(filter, () => {
     page.value = 1;
-    window.history.pushState(
-        null,
-        document.title,
-        `${window.location.pathname}?filter=${filter.value}&page=${page.value}`
-    );
 });
 
-watch(page, () => {
+watch(pageStateOptions, (value) => {
     window.history.pushState(
         null,
         document.title,
-        `${window.location.pathname}?filter=${filter.value}&page=${page.value}`
+        `${window.location.pathname}?filter=${value.filter}&page=${value.page}`
     );
 });
 // ... any other composition logic ...
