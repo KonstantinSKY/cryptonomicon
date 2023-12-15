@@ -192,7 +192,11 @@
 
 <script setup>
 import { ref, onMounted, watch, computed } from "vue";
-import { cryptocompare } from "../security.js";
+import {
+    loadTickerList,
+    subscribeToTicker,
+    unsubscribeFromTicker,
+} from "@/api";
 
 let ticker = ref(""),
     filter = ref(""),
@@ -200,15 +204,23 @@ let ticker = ref(""),
     selectedTicker = ref(null),
     graph = ref([]),
     foundTickers = ref([]),
-    ticker_list = {},
+    tickerList = {},
     tickerError = ref(""),
     page = ref(1);
 
-const subcribedIDs = {};
+// const subcribedIDs = {};
 
 // Getting data from Storages
 tickers.value = JSON.parse(localStorage.getItem("crypto-list") || "[]");
-tickers.value.forEach((t) => subscribeToUpdate(t.name));
+// tickers.value.forEach((t) => subscribeToUpdate(t.name));
+
+tickers.value.forEach((t) => {
+    console.log("subscrabed for ", t.name);
+    subscribeToTicker(t.name, (newPrice) => {
+        updateTicker(t.name, newPrice);
+        console.log("ticker price changed to", newPrice, t.name);
+    });
+});
 
 const windowData = Object.fromEntries(new URL(window.location).searchParams);
 filter.value = windowData.filter || "";
@@ -245,7 +257,6 @@ const normalizedGraph = computed(() => {
     if (maxValue === minValue) {
         return graph.value.map(() => 50);
     }
-    // console.log("Normalizing Graph..");
     return graph.value.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
     );
@@ -259,7 +270,7 @@ const pageStateOptions = computed(() => {
 });
 
 function checkTickerErrors() {
-    const isExistsTicker = Object.values(ticker_list).some(
+    const isExistsTicker = Object.values(tickerList.value).some(
         (tickerObj) => tickerObj.Symbol === ticker.value.toLocaleUpperCase()
     );
     const isTickerAdded = tickers.value.some(
@@ -276,23 +287,14 @@ function checkTickerErrors() {
     return false;
 }
 
-onMounted(async () => {
-    try {
-        const response = await fetch(
-            `https://min-api.cryptocompare.com/data/all/coinlist?summary=true&api_key=${cryptocompare.key}`
-        );
-        if (!response.ok) {
-            throw new Error("Network response was not ok");
-        }
-        let resp = await response.json();
-        console.log("RESPONSE:", resp);
-        ticker_list = resp.Data;
-        // Process your data here
-        console.log("GOT DATA:", ticker_list);
-    } catch (error) {
-        console.error("There was a problem with the fetch operation:", error);
-    }
+onMounted(() => {
+    getTickerList();
 });
+
+async function getTickerList() {
+    tickerList.value = await loadTickerList();
+    console.log("ticker_list:", tickerList.value);
+}
 
 function checkSymbol(event) {
     console.log("Event", event);
@@ -317,8 +319,8 @@ function searchTickers() {
     const searchQuery = ticker.value.toLowerCase();
     let matchCount = 0;
 
-    console.log("TickerList", ticker_list);
-    for (let t of Object.values(ticker_list)) {
+    console.log("TickerList", tickerList);
+    for (let t of Object.values(tickerList.value)) {
         if (matchCount >= 4) {
             break; // Stop the loop if 4 matches are found
         }
@@ -340,35 +342,33 @@ function clickTickerBadge(t) {
     add();
 }
 
-function subscribeToUpdate(tickerName) {
-    subcribedIDs[tickerName] = setInterval(async () => {
-        const f = await fetch(
-            `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=${cryptocompare.key}`
-        );
-        const data = await f.json();
-        // console.log("New Ticker:", tickerName, "DATA ", data);
-        if (data.Response === "Error") {
-            console.log("Response Error:", data.Message);
-            clearInterval(subcribedIDs[tickerName]);
-            return;
-        }
-        // newTicker.price = data.USD;
-        // tickers.find((t) => t.name === newTicker.name).price = data.USD;
-        let tickerToUpdate = tickers.value.find((t) => t.name === tickerName);
-        if (tickerToUpdate) {
-            tickerToUpdate.price = data.USD;
-            if (selectedTicker.value?.name === tickerName) {
-                graph.value.push(data.USD);
-                console.log("Added new GraphBar", data.USD);
-            }
-        } else {
-            // Handle the case where the ticker does not exist
-            // For example, you might want to add it to the array or log an error
-            console.log("Ticker not found:", tickerName);
-        }
-
-        // console.log("New TickerPrice:", tickers);
-    }, 3000);
+// function subscribeToUpdate(tickerName) {
+//     subcribedIDs[tickerName] = setInterval(async () => {
+//         const data = await loadTickerPrice(tickerName);
+//         if (data.Response === "Error") {
+//             console.log("Response Error:", data.Message);
+//             clearInterval(subcribedIDs[tickerName]);
+//             return;
+//         }
+//         let tickerToUpdate = tickers.value.find((t) => t.name === tickerName);
+//         if (tickerToUpdate) {
+//             tickerToUpdate.price = data.USD;
+//             if (selectedTicker.value?.name === tickerName) {
+//                 graph.value.push(data.USD);
+//                 console.log("Added new GraphBar", data.USD);
+//             }
+//         } else {
+//             console.log("Ticker not found:", tickerName);
+//         }
+//     }, 3000);
+// }
+//
+function updateTicker(tickerName, price) {
+    tickers.value
+        .filter((t) => t.name === tickerName)
+        .forEach((t) => {
+            t.price = price;
+        });
 }
 
 const add = () => {
@@ -384,7 +384,15 @@ const add = () => {
     tickers.value = [...tickers.value, currentTicker];
 
     console.log("Tickers after Added", tickers.value);
-    subscribeToUpdate(currentTicker.name);
+    // subscribeToUpdate(currentTicker.name);
+    subscribeToTicker(currentTicker.name, (newPrice) => {
+        updateTicker(currentTicker.name, newPrice);
+        console.log(
+            "ticker price changed  and updated to",
+            newPrice,
+            currentTicker.name
+        );
+    });
     ticker.value = "";
     foundTickers.value = [];
 };
@@ -399,7 +407,8 @@ function handleDelete(tickerToRemove) {
     // console.log("Clicked for Delete", tickerToRemove, "from", tickers);
     // // alert("Clicked for Delete", tickerToRemove);
     alert("Deleting:" + tickerToRemove.name);
-    clearInterval(subcribedIDs[tickerToRemove.name]);
+    // clearInterval(subcribedIDs[tickerToRemove.name]);
+    unsubscribeFromTicker(tickerToRemove.name);
     if (selectedTicker.value === tickerToRemove) {
         selectedTicker.value = null;
     }
