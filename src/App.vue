@@ -1,6 +1,7 @@
 <template>
     <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
         <div class="container">
+            <h1>Cryptonomicon</h1>
             <section>
                 <div class="flex">
                     <div class="max-w-xs">
@@ -175,6 +176,16 @@
                     </svg>
                 </button>
             </section>
+            <Popup
+                :is-open="isPopupOpen"
+                :title="popupOptions.Title"
+                :is-cancel-btn="popupOptions.isCancelBtn"
+                :is-confirm-input="popupOptions.isConfirmInput"
+                @ok="popupConfirmed"
+                @close="isPopupOpen = false"
+            >
+                <small>{{ popupOptions.Text }}</small>
+            </Popup>
         </div>
     </div>
 </template>
@@ -192,6 +203,7 @@
 
 <script setup>
 import { ref, onMounted, watch, computed } from "vue";
+import Popup from "./components/modal-popup.vue";
 import {
     loadTickerList,
     subscribeToTicker,
@@ -206,7 +218,8 @@ let ticker = ref(""),
     foundTickers = ref([]),
     tickerList = {},
     tickerError = ref(""),
-    page = ref(1);
+    page = ref(1),
+    isPopupOpen = ref(false);
 
 // const subcribedIDs = {};
 
@@ -215,16 +228,21 @@ tickers.value = JSON.parse(localStorage.getItem("crypto-list") || "[]");
 // tickers.value.forEach((t) => subscribeToUpdate(t.name));
 
 tickers.value.forEach((t) => {
-    console.log("subscrabed for ", t.name);
+    // console.log("subscrabed for ", t.name);
     subscribeToTicker(t.name, (newPrice) => {
         updateTicker(t.name, newPrice);
-        console.log("ticker price changed to", newPrice, t.name);
+        // console.log("ticker price changed to", newPrice, t.name);
     });
 });
 
 const windowData = Object.fromEntries(new URL(window.location).searchParams);
 filter.value = windowData.filter || "";
 page.value = Number(windowData.page) || 1;
+
+let popupOptions = {
+    Title: "new Modal Popup Title",
+    Text: "new Modal Popup Text",
+};
 
 //Computed methods
 /** @type {ComputedRef<number>} */
@@ -387,17 +405,23 @@ const add = () => {
     // subscribeToUpdate(currentTicker.name);
     subscribeToTicker(currentTicker.name, (newPrice) => {
         updateTicker(currentTicker.name, newPrice);
-        console.log(
-            "ticker price changed  and updated to",
-            newPrice,
-            currentTicker.name
-        );
     });
     ticker.value = "";
     foundTickers.value = [];
 };
 
 function handleDelete(tickerToRemove) {
+    popupOptions = {
+        Title: "Delete Ticker!",
+        Text:
+            "Are you sure for delete the ticker " +
+            tickerToRemove.name +
+            " - USD ?",
+        isCancelBtn: false,
+        isConfirmInput: true,
+        confirmationText: "I confirmedo"
+    };
+    isPopupOpen.value = true;
     tickers.value = tickers.value.filter((t) => t !== tickerToRemove);
 
     // const index = tickers.value.findIndex(
@@ -406,13 +430,18 @@ function handleDelete(tickerToRemove) {
     //
     // console.log("Clicked for Delete", tickerToRemove, "from", tickers);
     // // alert("Clicked for Delete", tickerToRemove);
-    alert("Deleting:" + tickerToRemove.name);
+    // alert("Deleting:" + tickerToRemove.name);
     // clearInterval(subcribedIDs[tickerToRemove.name]);
     unsubscribeFromTicker(tickerToRemove.name);
     if (selectedTicker.value === tickerToRemove) {
         selectedTicker.value = null;
     }
     // tickers = tickers.filter((t) => t !== tickerToRemove);
+}
+
+function popupConfirmed() {
+    alert("Confirmed!");
+    this.isPopupOpen = false;
 }
 
 watch(tickers, () => {
